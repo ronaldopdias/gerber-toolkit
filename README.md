@@ -181,10 +181,13 @@ project, and download every available output:
 
 Use **Download all (ZIP)** to bundle every available output into one archive.
 
-Boardview export needs component, pad, and net data. Gerber/Excellon packages
-carry that only when they include X2 (`%TO`/`%TF`) attributes or an embedded
-netlist; bare copper files produce a sparse boardview whose pads are mostly
-unconnected, because the data to connect them is not present in the source.
+Boardview export derives pad nets from copper connectivity: it unions each
+layer's pads, traces, and pours so pads sharing copper get the same net, and
+labels them with the real net name wherever the source carries one (X2 `%TO.N`
+attributes) or a stable `Net_N` otherwise. Component reference designators and
+pin names still require component metadata (X2 `%TO`/`%TF` or a netlist); bare
+copper files therefore yield a connectivity-accurate boardview with generic
+part names rather than a full CAD-quality one.
 
 Formats that the loaded data cannot support are listed as unavailable with
 the reason, matching the toolkit's honest availability model. Everything

@@ -1,3 +1,5 @@
+import { GerberCircuitJsonConnectivity } from './GerberCircuitJsonConnectivity.mjs'
+
 // Millimetres to mils (thousandths of an inch); BVR coordinates are in mils.
 const MM_TO_MIL = 39.37007874015748
 
@@ -106,7 +108,8 @@ export class CircuitJsonBvrExporter {
                 model,
                 sourceComponentName
             ),
-            padsByComponent: CircuitJsonBvrExporter.#padsByComponent(model)
+            padsByComponent: CircuitJsonBvrExporter.#padsByComponent(model),
+            padNet: GerberCircuitJsonConnectivity.assignPadNets(model)
         }
     }
 
@@ -186,7 +189,12 @@ export class CircuitJsonBvrExporter {
                 const sourcePortId = index.pcbPort.get(pad.pcb_port_id)
                 const pinName =
                     index.sourcePortName.get(sourcePortId) || String(pinId)
-                const net = index.netByPort.get(sourcePortId) || 'UNCONNECTED'
+                // Prefer a net the source explicitly tied to this pad; otherwise
+                // fall back to the net derived from copper connectivity.
+                const net =
+                    index.netByPort.get(sourcePortId) ||
+                    index.padNet.get(pad.pcb_smtpad_id) ||
+                    'UNCONNECTED'
                 // Pads the source never tied to a component (bare Gerber data)
                 // become their own single-pin part so they are not falsely
                 // highlighted together as one component.
