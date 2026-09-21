@@ -178,6 +178,9 @@ project, and download every available output:
 - Specctra DSN routing (`.dsn`) when the document contains routable geometry
 - Boardview (`.brd`, OpenBoardView/FlexBV BRD2) when the source
   carries component and pad metadata
+- KiCad PCB (`.kicad_pcb`) with copper traces, pours, pads, and nets — the
+  format to use when you need to _see_ the copper (KiCad, BVSense, and other
+  viewers render it)
 
 Use **Download all (ZIP)** to bundle every available output into one archive.
 

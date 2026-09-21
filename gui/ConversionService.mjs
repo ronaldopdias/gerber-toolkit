@@ -7,6 +7,7 @@ import {
 import { strToU8, zipSync } from 'fflate'
 
 import { CircuitJsonBoardviewExporter } from '../src/convergence/CircuitJsonBoardviewExporter.mjs'
+import { CircuitJsonKicadPcbExporter } from '../src/convergence/CircuitJsonKicadPcbExporter.mjs'
 
 const TARGETS = [
     {
@@ -70,6 +71,13 @@ const TARGETS = [
         label: 'Boardview (OpenBoardView .brd)',
         kind: 'boardview-brd',
         fileExtension: '.brd',
+        mediaType: 'text/plain;charset=utf-8'
+    },
+    {
+        id: 'kicad-pcb',
+        label: 'KiCad PCB with copper (.kicad_pcb)',
+        kind: 'kicad-pcb',
+        fileExtension: '.kicad_pcb',
         mediaType: 'text/plain;charset=utf-8'
     }
 ]
@@ -213,6 +221,8 @@ export class ConversionService {
                     .data
             case 'boardview-brd':
                 return strToU8(CircuitJsonBoardviewExporter.export(document))
+            case 'kicad-pcb':
+                return strToU8(CircuitJsonKicadPcbExporter.export(document))
             default:
                 throw new Error(`Unknown conversion kind: ${target.kind}.`)
         }

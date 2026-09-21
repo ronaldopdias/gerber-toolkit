@@ -128,7 +128,8 @@ test('ConversionService lists every supported conversion target', async () => {
             'pick-place-csv',
             'fabrication-notes-json',
             'routing-dsn',
-            'boardview-brd'
+            'boardview-brd',
+            'kicad-pcb'
         ]
     )
     for (const row of rows) {
