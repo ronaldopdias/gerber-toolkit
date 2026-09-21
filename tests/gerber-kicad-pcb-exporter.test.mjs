@@ -89,6 +89,45 @@ test('CircuitJsonKicadPcbExporter tags copper with a net table', async () => {
     assert.ok(/\(net \d+ "GND"\)/.test(text))
 })
 
+test('CircuitJsonKicadPcbExporter declares a two-copper-layer stackup', async () => {
+    const text = CircuitJsonKicadPcbExporter.export(await loadCopperDocument())
+    const signalLayers = (text.match(/\(\d+ "[^"]+" signal\)/g) || []).length
+    assert.equal(signalLayers, 2)
+    assert.ok(text.includes('(stackup'))
+    assert.ok(text.includes('"F.Cu" (type "copper")'))
+    assert.ok(text.includes('"B.Cu" (type "copper")'))
+})
+
+test('CircuitJsonKicadPcbExporter sizes circular pads from their radius', () => {
+    const model = [
+        { type: 'pcb_board', outline: [] },
+        {
+            type: 'pcb_smtpad',
+            pcb_smtpad_id: 'c',
+            x: 0,
+            y: 0,
+            layer: 'bottom',
+            shape: 'circle',
+            radius: 0.45
+        },
+        {
+            type: 'pcb_smtpad',
+            pcb_smtpad_id: 'r',
+            x: 1,
+            y: 1,
+            layer: 'bottom',
+            shape: 'rect',
+            width: 3,
+            height: 2
+        }
+    ]
+    const text = CircuitJsonKicadPcbExporter.export(model)
+    // Circle radius 0.45 -> diameter 0.9, not the 0.2 placeholder.
+    assert.ok(text.includes('smd circle (at 0 0) (size 0.9 0.9)'))
+    assert.ok(text.includes('smd rect (at 0 0) (size 3 2)'))
+    assert.ok(!text.includes('(size 0.2 0.2)'))
+})
+
 test('CircuitJsonKicadPcbExporter draws pours as filled graphics, not zones', () => {
     const model = [
         { type: 'pcb_board', outline: [] },

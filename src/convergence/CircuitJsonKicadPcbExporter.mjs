@@ -146,12 +146,43 @@ export class CircuitJsonKicadPcbExporter {
             '  (generator "gerber-toolkit")',
             '  (general (thickness 1.6))',
             '  (paper "A4")',
+            // Canonical two-layer board: only F.Cu and B.Cu are copper
+            // (signal); the rest are technical layers, and the explicit
+            // two-copper stackup keeps editors from inferring inner layers.
             '  (layers',
             '    (0 "F.Cu" signal)',
             '    (31 "B.Cu" signal)',
+            '    (34 "B.Paste" user)',
+            '    (35 "F.Paste" user)',
+            '    (36 "B.SilkS" user "B.Silkscreen")',
+            '    (37 "F.SilkS" user "F.Silkscreen")',
+            '    (38 "B.Mask" user)',
+            '    (39 "F.Mask" user)',
+            '    (40 "Dwgs.User" user "User.Drawings")',
+            '    (41 "Cmts.User" user "User.Comments")',
             '    (44 "Edge.Cuts" user)',
+            '    (45 "Margin" user)',
+            '    (46 "B.CrtYd" user "B.Courtyard")',
+            '    (47 "F.CrtYd" user "F.Courtyard")',
+            '    (48 "B.Fab" user)',
+            '    (49 "F.Fab" user)',
             '  )',
-            '  (setup (pad_to_mask_clearance 0))',
+            '  (setup',
+            '    (stackup',
+            '      (layer "F.SilkS" (type "Top Silk Screen"))',
+            '      (layer "F.Paste" (type "Top Solder Paste"))',
+            '      (layer "F.Mask" (type "Top Solder Mask") (thickness 0.01))',
+            '      (layer "F.Cu" (type "copper") (thickness 0.035))',
+            '      (layer "dielectric 1" (type "core") (thickness 1.51) (material "FR4") (epsilon_r 4.5))',
+            '      (layer "B.Cu" (type "copper") (thickness 0.035))',
+            '      (layer "B.Mask" (type "Bottom Solder Mask") (thickness 0.01))',
+            '      (layer "B.Paste" (type "Bottom Solder Paste"))',
+            '      (layer "B.SilkS" (type "Bottom Silk Screen"))',
+            '      (copper_finish "None")',
+            '      (dielectric_constraints no)',
+            '    )',
+            '    (pad_to_mask_clearance 0)',
+            '  )',
             netLines
         ].join('\n')
     }
@@ -284,23 +315,48 @@ export class CircuitJsonKicadPcbExporter {
             const layer = CircuitJsonKicadPcbExporter.#layer(element.layer)
             const name = nets.pad(element)
             const netId = nets.idFor(name)
-            const shape = element.shape === 'circle' ? 'circle' : 'rect'
-            const width = CircuitJsonKicadPcbExporter.#round(
-                element.width || 0.2
-            )
-            const height = CircuitJsonKicadPcbExporter.#round(
-                element.height || element.width || 0.2
-            )
+            const size = CircuitJsonKicadPcbExporter.#padSize(element)
             lines.push(
                 [
                     `  (footprint "gerber-toolkit:pad${index}" (layer "${layer}") (at ${CircuitJsonKicadPcbExporter.#xy(element)}) (uuid "${uuid()}")`,
                     `    (attr smd)`,
-                    `    (pad "1" smd ${shape} (at 0 0) (size ${width} ${height}) (layers "${layer}") (net ${netId} "${CircuitJsonKicadPcbExporter.#escape(name)}") (uuid "${uuid()}"))`,
+                    `    (pad "1" smd ${size.shape} (at 0 0) (size ${size.width} ${size.height}) (layers "${layer}") (net ${netId} "${CircuitJsonKicadPcbExporter.#escape(name)}") (uuid "${uuid()}"))`,
                     `  )`
                 ].join('\n')
             )
         }
         return lines.join('\n')
+    }
+
+    /**
+     * Resolves one pad's KiCad shape and size from its geometry.
+     *
+     * Circular pads carry a `radius` rather than width/height, so a naive
+     * width/height read collapses them to a placeholder; this reads the radius
+     * as a diameter and only falls back when no real dimension exists.
+     * @param {object} pad Pad element.
+     * @returns {{ shape: string, width: number, height: number }} Pad size.
+     */
+    static #padSize(pad) {
+        const radius = Number(pad.radius)
+        if (Number.isFinite(radius) && radius > 0) {
+            const diameter = CircuitJsonKicadPcbExporter.#round(radius * 2)
+            return { shape: 'circle', width: diameter, height: diameter }
+        }
+        const width = CircuitJsonKicadPcbExporter.#round(Number(pad.width) || 0)
+        const height = CircuitJsonKicadPcbExporter.#round(
+            Number(pad.height) || Number(pad.width) || 0
+        )
+        if (width > 0 && height > 0) {
+            const round =
+                pad.shape === 'circle' || pad.shape === 'oval'
+                    ? width === height
+                        ? 'circle'
+                        : 'oval'
+                    : 'rect'
+            return { shape: round, width, height }
+        }
+        return { shape: 'circle', width: 0.2, height: 0.2 }
     }
 
     /**
