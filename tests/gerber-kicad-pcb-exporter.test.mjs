@@ -197,3 +197,54 @@ test('CircuitJsonKicadPcbExporter draws pours as filled graphics, not zones', ()
     assert.ok(text.includes('(gr_poly '))
     assert.ok(!text.includes('(zone '))
 })
+
+test('CircuitJsonKicadPcbExporter makes hole-coincident pads through-hole vias', () => {
+    const model = [
+        { type: 'pcb_board', outline: [] },
+        {
+            type: 'pcb_smtpad',
+            pcb_smtpad_id: 'p',
+            x: 5,
+            y: 5,
+            layer: 'bottom',
+            shape: 'circle',
+            radius: 0.45
+        },
+        {
+            type: 'pcb_plated_hole',
+            pcb_plated_hole_id: 'h',
+            shape: 'circle',
+            x: 5,
+            y: 5,
+            hole_diameter: 0.4,
+            outer_diameter: 0.4,
+            layers: ['top', 'bottom']
+        }
+    ]
+    const text = CircuitJsonKicadPcbExporter.export(model)
+    assert.ok(text.includes('through_hole'))
+    assert.match(
+        text,
+        /pad "1" thru_hole [^\n]*\(drill 0\.4\)[^\n]*\(layers "\*\.Cu"/
+    )
+    assert.ok(!text.includes('smd '))
+})
+
+test('CircuitJsonKicadPcbExporter keeps pads SMD without a coincident hole', () => {
+    const model = [
+        { type: 'pcb_board', outline: [] },
+        {
+            type: 'pcb_smtpad',
+            pcb_smtpad_id: 'p',
+            x: 5,
+            y: 5,
+            layer: 'bottom',
+            shape: 'rect',
+            width: 1,
+            height: 1
+        }
+    ]
+    const text = CircuitJsonKicadPcbExporter.export(model)
+    assert.ok(text.includes('pad "1" smd'))
+    assert.ok(!text.includes('thru_hole'))
+})

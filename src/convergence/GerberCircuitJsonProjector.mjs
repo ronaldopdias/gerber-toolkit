@@ -226,6 +226,12 @@ export class GerberCircuitJsonProjector {
                     ownership
                 )
             }
+        } else if (semantics.kind === 'drill') {
+            GerberCircuitJsonProjector.#drillHoles(
+                primitives,
+                layerIndex,
+                model
+            )
         } else if (
             semantics.kind !== 'outline' &&
             semantics.kind !== 'mask' &&
@@ -293,6 +299,39 @@ export class GerberCircuitJsonProjector {
             model.push(
                 GerberCircuitJsonProjector.#hole(
                     drills[index],
+                    layerIndex,
+                    index
+                )
+            )
+        }
+    }
+
+    /**
+     * Projects a gerber-format drill layer's flashes into plated or bare holes.
+     *
+     * Excellon drill layers expose a `drills` array the trailing loop handles,
+     * but gerber-format drill files (`FileFunction=Plated…Drill`) carry each
+     * hole as a circular flash. Each flash is normalised to the drill shape
+     * {@link #hole} expects, taking the plated flag from its X2 file function.
+     * @param {Record<string, any>[]} primitives Native drill primitives.
+     * @param {number} layerIndex Stable layer index.
+     * @param {Record<string, any>[]} model Destination.
+     * @returns {void}
+     */
+    static #drillHoles(primitives, layerIndex, model) {
+        for (let index = 0; index < primitives.length; index += 1) {
+            const flash = primitives[index]
+            if (flash?.type !== 'flash') continue
+            const diameter = GerberCircuitJsonProjector.#positive(
+                flash.diameter ?? flash.shape?.diameter
+            )
+            if (!diameter) continue
+            const fileFunction = flash.attributes?.file?.FileFunction ?? []
+            const plated =
+                String(fileFunction[0] || '').toLowerCase() !== 'nonplated'
+            model.push(
+                GerberCircuitJsonProjector.#hole(
+                    { x: flash.x, y: flash.y, diameter, plated },
                     layerIndex,
                     index
                 )

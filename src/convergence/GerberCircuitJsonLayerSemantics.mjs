@@ -60,6 +60,10 @@ export class GerberCircuitJsonLayerSemantics {
                     GerberCircuitJsonLayerSemantics.#side(fileFunction) || 'top'
             }
         }
+        // X2 drill/hole files declare Plated or NonPlated as their function.
+        if (functionName === 'plated' || functionName === 'nonplated') {
+            return { kind: 'drill', circuitLayer: 'top' }
+        }
         if (functionName) {
             return {
                 kind: 'documentation',

@@ -26,6 +26,9 @@ export class CircuitJsonKicadPcbExporter {
         const nets = CircuitJsonKicadPcbExporter.#netTable(model, pourNets)
         const uuid = CircuitJsonKicadPcbExporter.#uuidFactory()
         const traceLayers = CircuitJsonKicadPcbExporter.#traceLayers(model)
+        const holes = model.filter(
+            (element) => element.type === 'pcb_plated_hole'
+        )
         const body = [
             CircuitJsonKicadPcbExporter.#header(nets),
             CircuitJsonKicadPcbExporter.#outline(model, uuid),
@@ -38,7 +41,8 @@ export class CircuitJsonKicadPcbExporter {
                 traceLayers,
                 pourNets
             ),
-            CircuitJsonKicadPcbExporter.#footprints(model, nets, uuid)
+            CircuitJsonKicadPcbExporter.#footprints(model, nets, uuid, holes),
+            CircuitJsonKicadPcbExporter.#vias(model, nets, uuid, holes)
         ]
             .filter((section) => section.length)
             .join('\n')
@@ -374,26 +378,84 @@ export class CircuitJsonKicadPcbExporter {
      * @param {() => string} uuid UUID factory.
      * @returns {string} Footprint text.
      */
-    static #footprints(model, nets, uuid) {
+    static #footprints(model, nets, uuid, holes) {
         const lines = []
         let index = 0
         for (const element of model) {
             if (element.type !== 'pcb_smtpad') continue
             index += 1
-            const layer = CircuitJsonKicadPcbExporter.#layer(element.layer)
             const name = nets.pad(element)
             const netId = nets.idFor(name)
             const size = CircuitJsonKicadPcbExporter.#padSize(element)
+            const hole = CircuitJsonKicadPcbExporter.#holeAt(element, holes)
+            const layer = CircuitJsonKicadPcbExporter.#layer(element.layer)
+            // A pad sitting on a plated hole is a through-hole via: emit it on
+            // every copper layer with its real drill so viewers show it on both
+            // sides and join the net across them. Otherwise it stays SMD.
+            const pad = hole
+                ? `    (pad "1" thru_hole ${size.shape} (at 0 0) (size ${size.width} ${size.height}) (drill ${CircuitJsonKicadPcbExporter.#round(hole.hole_diameter)}) (layers "*.Cu" "*.Mask") (net ${netId} "${CircuitJsonKicadPcbExporter.#escape(name)}") (uuid "${uuid()}"))`
+                : `    (pad "1" smd ${size.shape} (at 0 0) (size ${size.width} ${size.height}) (layers "${layer}") (net ${netId} "${CircuitJsonKicadPcbExporter.#escape(name)}") (uuid "${uuid()}"))`
             lines.push(
                 [
                     `  (footprint "gerber-toolkit:pad${index}" (layer "${layer}") (at ${CircuitJsonKicadPcbExporter.#xy(element)}) (uuid "${uuid()}")`,
-                    `    (attr smd)`,
-                    `    (pad "1" smd ${size.shape} (at 0 0) (size ${size.width} ${size.height}) (layers "${layer}") (net ${netId} "${CircuitJsonKicadPcbExporter.#escape(name)}") (uuid "${uuid()}"))`,
+                    `    (attr ${hole ? 'through_hole' : 'smd'})`,
+                    pad,
                     `  )`
                 ].join('\n')
             )
         }
         return lines.join('\n')
+    }
+
+    /**
+     * Emits plated holes with no coincident pad as bare through-hole vias.
+     * @param {object[]} model Model element array.
+     * @param {object} nets Net table.
+     * @param {() => string} uuid UUID factory.
+     * @param {object[]} holes Plated holes.
+     * @returns {string} Via text.
+     */
+    static #vias(model, nets, uuid, holes) {
+        const pads = model.filter((element) => element.type === 'pcb_smtpad')
+        const lines = []
+        for (const hole of holes) {
+            const covered = pads.some(
+                (pad) =>
+                    Math.hypot(
+                        Number(pad.x) - Number(hole.x),
+                        Number(pad.y) - Number(hole.y)
+                    ) < 0.05
+            )
+            if (covered) continue
+            const drill = CircuitJsonKicadPcbExporter.#round(hole.hole_diameter)
+            const size = CircuitJsonKicadPcbExporter.#round(
+                hole.outer_diameter || hole.hole_diameter
+            )
+            lines.push(
+                `  (via (at ${CircuitJsonKicadPcbExporter.#xy(hole)}) (size ${size}) (drill ${drill}) (layers "F.Cu" "B.Cu") (net 0) (uuid "${uuid()}"))`
+            )
+        }
+        return lines.join('\n')
+    }
+
+    /**
+     * Finds a plated hole coincident with one pad.
+     * @param {object} pad Pad element.
+     * @param {object[]} holes Plated holes.
+     * @returns {object | null} Coincident hole or null.
+     */
+    static #holeAt(pad, holes) {
+        for (const hole of holes) {
+            if (
+                Math.hypot(
+                    Number(pad.x) - Number(hole.x),
+                    Number(pad.y) - Number(hole.y)
+                ) < 0.05
+            ) {
+                return hole
+            }
+        }
+        return null
     }
 
     /**
