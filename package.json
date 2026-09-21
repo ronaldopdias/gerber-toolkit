@@ -55,6 +55,8 @@
         "test": "node --test",
         "format": "prettier --write .",
         "check:format": "prettier --check .",
+        "gui": "node gui/serve.mjs",
+        "electron": "electron gui/electron/main.mjs",
         "capture:api": "node scripts/capture-api-baseline.mjs",
         "check:features": "node scripts/check-feature-preservation.mjs",
         "benchmark": "node --expose-gc scripts/run-benchmarks.mjs --compare benchmarks/baseline-v0.1.21.json"
@@ -65,6 +67,7 @@
         "polygon-clipping": "^0.15.7"
     },
     "devDependencies": {
+        "electron": "^44.4.3",
         "prettier": "^3.4.2"
     },
     "engines": {

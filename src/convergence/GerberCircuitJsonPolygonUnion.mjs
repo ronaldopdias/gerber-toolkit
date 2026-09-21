@@ -2,6 +2,16 @@ import polygonClipping from 'polygon-clipping'
 
 const BATCH_SIZE = 256
 
+// polygon-clipping's sweep line is not fully robust against floating-point
+// noise: two vertices that should coincide but differ by rounding (for example
+// 33.467910999999816 vs 33.467911) can leave a segment unfindable in its tree
+// and abort the union. These grids snap coordinates to progressively coarser
+// fabrication-safe resolutions on failure. The finest grid is well below any
+// Gerber/Excellon coordinate resolution, so a successful retry is geometrically
+// indistinguishable from the exact result while removing the sub-nanometre
+// noise that trips the sweep line.
+const SNAP_GRIDS = [1e-7, 1e-6, 1e-5, 1e-4]
+
 /** AABB-aware polygon union. */
 export class GerberCircuitJsonPolygonUnion {
     /** @param {number[][][][][]} operands Inputs. @returns {number[][][][]} Union. */
@@ -23,7 +33,7 @@ export class GerberCircuitJsonPolygonUnion {
         const locallyMerged = components.flatMap((component) =>
             GerberCircuitJsonPolygonUnion.#boundedUnion(component)
         )
-        return polygonClipping.union(locallyMerged)
+        return GerberCircuitJsonPolygonUnion.#safeUnion(locallyMerged)
     }
 
     /** @param {number[][][][][]} operands Inputs. @returns {number[][][][][][]} Stable components. */
@@ -126,14 +136,57 @@ export class GerberCircuitJsonPolygonUnion {
     static #boundedUnion(operands) {
         let merged = []
         for (let offset = 0; offset < operands.length; offset += BATCH_SIZE) {
-            const chunk = polygonClipping.union(
+            const chunk = GerberCircuitJsonPolygonUnion.#safeUnion(
                 ...operands.slice(offset, offset + BATCH_SIZE)
             )
             merged = merged.length
-                ? polygonClipping.union(merged, chunk)
+                ? GerberCircuitJsonPolygonUnion.#safeUnion(merged, chunk)
                 : chunk
         }
         return merged
+    }
+
+    /**
+     * Runs one polygon union, retrying with coordinate snapping when the
+     * sweep line fails on floating-point noise.
+     * @param {...number[][][][]} operands Multipolygon operands.
+     * @returns {number[][][][]} Union multipolygon.
+     */
+    static #safeUnion(...operands) {
+        try {
+            return polygonClipping.union(...operands)
+        } catch (error) {
+            for (const grid of SNAP_GRIDS) {
+                try {
+                    return polygonClipping.union(
+                        ...operands.map((operand) =>
+                            GerberCircuitJsonPolygonUnion.#snap(operand, grid)
+                        )
+                    )
+                } catch {
+                    // Try the next, coarser grid before giving up.
+                }
+            }
+            throw error
+        }
+    }
+
+    /**
+     * Snaps every coordinate of one multipolygon to a fixed grid.
+     * @param {number[][][][]} operand Multipolygon operand.
+     * @param {number} grid Grid resolution.
+     * @returns {number[][][][]} Snapped multipolygon.
+     */
+    static #snap(operand, grid) {
+        if (!Array.isArray(operand)) return operand
+        return operand.map((polygon) =>
+            polygon.map((ring) =>
+                ring.map((point) => [
+                    Math.round(point[0] / grid) * grid,
+                    Math.round(point[1] / grid) * grid
+                ])
+            )
+        )
     }
 
     /** @param {number[]} parents Parents. @param {number} index Index. @returns {number} Root. */

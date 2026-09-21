@@ -156,6 +156,52 @@ const nativeSvg = GerberPcbSvgRenderer.render(nativeDocument)
 const nativeScene = PcbScene3dBuilder.build(nativeDocument)
 ```
 
+## Conversion GUI
+
+A local browser GUI converts fabrication packages without writing any code.
+Start it from the repository root:
+
+```bash
+npm run gui        # or: node gui/serve.mjs
+```
+
+Then open <http://127.0.0.1:8461>. Use `--port <n>` to choose another port.
+Add Gerber, Excellon, and ZIP files (or drag them onto the page), load the
+project, and download every available output:
+
+- CircuitJSON model (`.circuit.json`)
+- Combined PCB SVG (`.pcb.svg`) and one SVG per layer in a ZIP archive
+- Bill of materials HTML (`.bom.html`)
+- 3D scene JSON (`.scene3d.json`)
+- Pick-and-place CSV and fabrication notes JSON when the source metadata
+  provides components or notes
+- Specctra DSN routing (`.dsn`) when the document contains routable geometry
+- Boardview (`.bvr`, FlexBV/OpenBoardView `BVRAW_FORMAT_1`) when the source
+  carries component and pad metadata
+
+Use **Download all (ZIP)** to bundle every available output into one archive.
+
+Boardview export needs component, pad, and net data. Gerber/Excellon packages
+carry that only when they include X2 (`%TO`/`%TF`) attributes or an embedded
+netlist; bare copper files produce a sparse boardview whose pads are mostly
+unconnected, because the data to connect them is not present in the source.
+
+Formats that the loaded data cannot support are listed as unavailable with
+the reason, matching the toolkit's honest availability model. Everything
+runs locally in the browser; no file content leaves the machine.
+
+### Desktop app (Electron)
+
+The same GUI runs as a desktop window. Electron is a dev dependency
+(`npm install` pulls it in); launch it from the repository root:
+
+```bash
+npm run electron
+```
+
+It starts the bundled static server on a private loopback port and opens the
+converter in one window — no separate `serve.mjs` process required.
+
 ## Documentation
 
 - [API](docs/api.md)

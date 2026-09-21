@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>gerber-toolkit converter</title>
+        <link rel="stylesheet" href="/gui/styles.css" />
+        <script type="importmap">
+            {
+                "imports": {
+                    "gerber-toolkit": "/src/index.mjs",
+                    "gerber-toolkit/": "/src/",
+                    "circuitjson-toolkit": "/node_modules/circuitjson-toolkit/src/index.mjs",
+                    "circuitjson-toolkit/": "/node_modules/circuitjson-toolkit/src/",
+                    "circuitjson-toolkit/parser": "/node_modules/circuitjson-toolkit/src/parser.mjs",
+                    "circuitjson-toolkit/project": "/node_modules/circuitjson-toolkit/src/project.mjs",
+                    "circuitjson-toolkit/renderers": "/node_modules/circuitjson-toolkit/src/renderers.mjs",
+                    "circuitjson-toolkit/interaction": "/node_modules/circuitjson-toolkit/src/interaction.mjs",
+                    "circuitjson-toolkit/query": "/node_modules/circuitjson-toolkit/src/query.mjs",
+                    "circuitjson-toolkit/manufacturing": "/node_modules/circuitjson-toolkit/src/manufacturing.mjs",
+                    "circuitjson-toolkit/simulation": "/node_modules/circuitjson-toolkit/src/simulation.mjs",
+                    "circuitjson-toolkit/scene3d": "/node_modules/circuitjson-toolkit/src/scene3d.mjs",
+                    "circuitjson-toolkit/capabilities": "/node_modules/circuitjson-toolkit/src/capabilities.mjs",
+                    "circuitjson-toolkit/extensions": "/node_modules/circuitjson-toolkit/src/extensions.mjs",
+                    "circuitjson-toolkit/testing": "/node_modules/circuitjson-toolkit/src/testing.mjs",
+                    "fflate": "/node_modules/fflate/esm/browser.js",
+                    "polygon-clipping": "/node_modules/polygon-clipping/dist/polygon-clipping.esm.js",
+                    "splaytree": "/node_modules/splaytree/dist/splaytree.js",
+                    "robust-predicates": "/node_modules/robust-predicates/index.js"
+                }
+            }
+        </script>
+    </head>
+    <body>
+        <main class="layout">
+            <header class="header">
+                <h1>Gerber project converter</h1>
+                <p class="muted">
+                    Loads RS-274X/X2 Gerber, Excellon drill files, and
+                    fabrication ZIP packages locally in your browser. Nothing is
+                    uploaded.
+                </p>
+            </header>
+
+            <section class="card">
+                <div id="drop-zone" class="drop-zone">
+                    <p>Drag fabrication files here</p>
+                    <button id="browse-button" type="button">
+                        Browse files
+                    </button>
+                    <input
+                        id="file-input"
+                        type="file"
+                        multiple
+                        accept=".gbr,.gtl,.gbl,.gts,.gbs,.gto,.gbo,.gm1,.gko,.gp1,.drl,.xln,.nc,.txt,.zip,.gml,.gpi"
+                        hidden
+                    />
+                </div>
+                <ul id="file-list" class="file-list"></ul>
+                <div class="actions">
+                    <button id="load-button" type="button" disabled>
+                        Load project
+                    </button>
+                    <button id="reset-button" type="button">Reset</button>
+                </div>
+                <p id="status" class="status-line" role="status"></p>
+            </section>
+
+            <section id="stats" class="card stats" hidden></section>
+
+            <section class="card">
+                <h2>Conversion targets</h2>
+                <ul id="targets" class="target-list"></ul>
+                <div class="actions">
+                    <button id="download-all-button" type="button" disabled>
+                        Download all (ZIP)
+                    </button>
+                </div>
+            </section>
+
+            <section class="card">
+                <h2>PCB preview</h2>
+                <iframe
+                    id="preview"
+                    class="preview"
+                    sandbox=""
+                    title="Rendered PCB preview"
+                    hidden
+                ></iframe>
+            </section>
+        </main>
+        <script>
+            window.__moduleErrors = []
+            window.addEventListener('error', (event) => {
+                window.__moduleErrors.push(
+                    `${event.message} @ ${event.filename}:${event.lineno}`
+                )
+            })
+            window.addEventListener('unhandledrejection', (event) => {
+                window.__moduleErrors.push(`rejection: ${event.reason}`)
+            })
+        </script>
+        <script type="module" src="/gui/GuiApp.mjs"></script>
+    </body>
+</html>

@@ -125,3 +125,31 @@ test('union preserves malformed nested-empty geometry errors in large batches', 
         /Input geometry is not a valid Polygon or MultiPolygon/u
     )
 })
+
+test('union merges overlapping operands carrying sub-epsilon coordinate noise', () => {
+    // Vertices that should coincide but differ by floating-point rounding are
+    // what trip polygon-clipping's sweep line on real fabrication data. The
+    // union of two overlapping rectangles must still collapse to the exact
+    // merged region regardless of that noise.
+    const noise = 1e-13
+    const left = rectangle(0, 0, 10, 10)
+    const right = rectangle(5 + noise, 0 - noise, 15, 10)
+
+    const merged = GerberCircuitJsonPolygonUnion.union([left, right])
+
+    assert.equal(merged.length, 1)
+    assert.ok(Math.abs(geometryArea(merged) - 150) < 1e-3)
+})
+
+test('union stays correct when snapping is exercised across a large batch', () => {
+    // A column of abutting rectangles with per-vertex noise exercises the
+    // batched union path; the result is one tall bar of the expected area.
+    const operands = Array.from({ length: 400 }, (_, index) => {
+        const jitter = (index % 2 === 0 ? 1 : -1) * 1e-12
+        return rectangle(0, index + jitter, 10, index + 1 + jitter)
+    })
+
+    const merged = GerberCircuitJsonPolygonUnion.union(operands)
+
+    assert.ok(Math.abs(geometryArea(merged) - 4000) < 1e-1)
+})
