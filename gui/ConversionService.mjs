@@ -6,7 +6,7 @@ import {
 } from 'gerber-toolkit'
 import { strToU8, zipSync } from 'fflate'
 
-import { CircuitJsonBvrExporter } from '../src/convergence/CircuitJsonBvrExporter.mjs'
+import { CircuitJsonBoardviewExporter } from '../src/convergence/CircuitJsonBoardviewExporter.mjs'
 
 const TARGETS = [
     {
@@ -66,10 +66,10 @@ const TARGETS = [
         mediaType: 'application/specctra-dsn'
     },
     {
-        id: 'boardview-bvr',
-        label: 'Boardview (FlexBV BVR)',
-        kind: 'boardview-bvr',
-        fileExtension: '.bvr',
+        id: 'boardview-brd',
+        label: 'Boardview (OpenBoardView .brd)',
+        kind: 'boardview-brd',
+        fileExtension: '.brd',
         mediaType: 'text/plain;charset=utf-8'
     }
 ]
@@ -95,7 +95,7 @@ export class ConversionService {
                     status: 'unavailable',
                     reason: 'Manufacturing export is unavailable.'
                 }
-            } else if (target.kind === 'boardview-bvr') {
+            } else if (target.kind === 'boardview-brd') {
                 status = boardview
             }
             return {
@@ -211,8 +211,8 @@ export class ConversionService {
             case 'manufacturing':
                 return ManufacturingService.export(document, { id: target.id })
                     .data
-            case 'boardview-bvr':
-                return strToU8(CircuitJsonBvrExporter.export(document))
+            case 'boardview-brd':
+                return strToU8(CircuitJsonBoardviewExporter.export(document))
             default:
                 throw new Error(`Unknown conversion kind: ${target.kind}.`)
         }
@@ -241,7 +241,7 @@ export class ConversionService {
      * @returns {{ status: string, reason: string }} Availability row.
      */
     static #boardviewStatus(document) {
-        if (CircuitJsonBvrExporter.hasBoardview(document)) {
+        if (CircuitJsonBoardviewExporter.hasBoardview(document)) {
             return { status: 'available', reason: '' }
         }
         return {

@@ -176,7 +176,7 @@ project, and download every available output:
 - Pick-and-place CSV and fabrication notes JSON when the source metadata
   provides components or notes
 - Specctra DSN routing (`.dsn`) when the document contains routable geometry
-- Boardview (`.bvr`, FlexBV/OpenBoardView `BVRAW_FORMAT_1`) when the source
+- Boardview (`.brd`, OpenBoardView/FlexBV BRD2) when the source
   carries component and pad metadata
 
 Use **Download all (ZIP)** to bundle every available output into one archive.

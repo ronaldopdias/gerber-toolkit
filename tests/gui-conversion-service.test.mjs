@@ -128,7 +128,7 @@ test('ConversionService lists every supported conversion target', async () => {
             'pick-place-csv',
             'fabrication-notes-json',
             'routing-dsn',
-            'boardview-bvr'
+            'boardview-brd'
         ]
     )
     for (const row of rows) {
@@ -251,7 +251,7 @@ test('ConversionService bundle includes manufacturing outputs when metadata exis
 
 test('ConversionService offers boardview only when component data exists', async () => {
     const plain = ConversionService.listTargets(await loadPlainDocument())
-    const plainRow = plain.find((row) => row.id === 'boardview-bvr')
+    const plainRow = plain.find((row) => row.id === 'boardview-brd')
     assert.equal(plainRow.status, 'unavailable')
     assert.match(plainRow.reason, /component/i)
 
@@ -259,18 +259,18 @@ test('ConversionService offers boardview only when component data exists', async
         await loadComponentDocument()
     )
     assert.equal(
-        component.find((row) => row.id === 'boardview-bvr').status,
+        component.find((row) => row.id === 'boardview-brd').status,
         'available'
     )
 })
 
-test('ConversionService converts a FlexBV BVR boardview file', async () => {
+test('ConversionService converts an OpenBoardView .brd boardview file', async () => {
     const document = await loadComponentDocument()
-    const result = ConversionService.convert(document, 'boardview-bvr')
+    const result = ConversionService.convert(document, 'boardview-brd')
     assert.equal(result.ok, true)
-    assert.ok(result.fileName.endsWith('.bvr'))
+    assert.ok(result.fileName.endsWith('.brd'))
     const text = new TextDecoder().decode(result.data)
-    assert.match(text, /^BVRAW_FORMAT_1/)
+    assert.match(text, /^0\nBRDOUT:/)
     assert.ok(text.includes('U1'))
     assert.ok(text.includes('GND'))
 })
