@@ -128,6 +128,51 @@ test('CircuitJsonKicadPcbExporter sizes circular pads from their radius', () => 
     assert.ok(!text.includes('(size 0.2 0.2)'))
 })
 
+test('CircuitJsonKicadPcbExporter strokes pours as segments only on trace-less layers', () => {
+    const ring = {
+        outer_ring: {
+            vertices: [
+                { x: 0, y: 0 },
+                { x: 4, y: 0 },
+                { x: 4, y: 4 },
+                { x: 0, y: 4 }
+            ]
+        }
+    }
+    const model = [
+        { type: 'pcb_board', outline: [] },
+        // Bottom has a real trace, so its pour stays a fill (no segments).
+        {
+            type: 'pcb_trace',
+            pcb_trace_id: 't',
+            route: [
+                { x: 0, y: 0, width: 0.2, layer: 'bottom' },
+                { x: 4, y: 0, width: 0.2, layer: 'bottom' }
+            ]
+        },
+        {
+            type: 'pcb_copper_pour',
+            pcb_copper_pour_id: 'b',
+            layer: 'bottom',
+            brep_shape: ring
+        },
+        // Top has only a pour, so it is stroked into segments to stay visible.
+        {
+            type: 'pcb_copper_pour',
+            pcb_copper_pour_id: 'f',
+            layer: 'top',
+            brep_shape: ring
+        }
+    ]
+    const text = CircuitJsonKicadPcbExporter.export(model)
+    assert.ok(/\(segment [^\n]*\(layer "F\.Cu"\)/.test(text))
+    // The only B.Cu segment is the real trace, not a pour outline.
+    const bottomSegments = (
+        text.match(/\(segment [^\n]*\(layer "B\.Cu"\)/g) || []
+    ).length
+    assert.equal(bottomSegments, 1)
+})
+
 test('CircuitJsonKicadPcbExporter draws pours as filled graphics, not zones', () => {
     const model = [
         { type: 'pcb_board', outline: [] },

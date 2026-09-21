@@ -24,11 +24,18 @@ export class CircuitJsonKicadPcbExporter {
         const model = CircuitJsonKicadPcbExporter.#model(document)
         const nets = CircuitJsonKicadPcbExporter.#netTable(model)
         const uuid = CircuitJsonKicadPcbExporter.#uuidFactory()
+        const traceLayers = CircuitJsonKicadPcbExporter.#traceLayers(model)
         const body = [
             CircuitJsonKicadPcbExporter.#header(nets),
             CircuitJsonKicadPcbExporter.#outline(model, uuid),
             CircuitJsonKicadPcbExporter.#segments(model, nets, uuid),
             CircuitJsonKicadPcbExporter.#pours(model, uuid),
+            CircuitJsonKicadPcbExporter.#pourOutlines(
+                model,
+                nets,
+                uuid,
+                traceLayers
+            ),
             CircuitJsonKicadPcbExporter.#footprints(model, nets, uuid)
         ]
             .filter((section) => section.length)
@@ -264,6 +271,60 @@ export class CircuitJsonKicadPcbExporter {
             lines.push(
                 `  (gr_poly (pts ${pts}) (layer "${layer}") (width 0) (fill solid) (uuid "${uuid()}"))`
             )
+        }
+        return lines.join('\n')
+    }
+
+    /**
+     * Collects the set of layers that carry discrete traces.
+     * @param {object[]} model Model element array.
+     * @returns {Set<string>} Layer names with at least one trace.
+     */
+    static #traceLayers(model) {
+        const layers = new Set()
+        for (const element of model) {
+            if (element.type !== 'pcb_trace') continue
+            for (const point of element.route ?? []) {
+                if (point.layer) layers.add(point.layer)
+            }
+        }
+        return layers
+    }
+
+    /**
+     * Emits pour outlines as copper track segments for layers with no traces.
+     *
+     * Where a copper layer projects as filled pours instead of discrete traces
+     * (a solid plane or reversed-image side), the pours are that layer's only
+     * copper. Viewers that render only track segments — such as BVSense — would
+     * otherwise show nothing there, so each pour boundary is stroked as thin
+     * segments to make the copper extent visible. Layers that already carry
+     * traces keep their pours as fills only, to avoid cluttering real routing.
+     * @param {object[]} model Model element array.
+     * @param {object} nets Net table.
+     * @param {() => string} uuid UUID factory.
+     * @param {Set<string>} traceLayers Layers that already have traces.
+     * @returns {string} Segment text.
+     */
+    static #pourOutlines(model, nets, uuid, traceLayers) {
+        const lines = []
+        for (const element of model) {
+            if (element.type !== 'pcb_copper_pour') continue
+            if (traceLayers.has(element.layer)) continue
+            const ring = CircuitJsonKicadPcbExporter.#cleanRing(
+                element.brep_shape?.outer_ring?.vertices ??
+                    element.shape?.outer_ring?.vertices
+            )
+            if (ring.length < 3) continue
+            const layer = CircuitJsonKicadPcbExporter.#layer(element.layer)
+            const netId = nets.idFor(nets.pour(element))
+            for (let index = 0; index < ring.length; index += 1) {
+                const start = ring[index]
+                const end = ring[(index + 1) % ring.length]
+                lines.push(
+                    `  (segment (start ${CircuitJsonKicadPcbExporter.#xy(start)}) (end ${CircuitJsonKicadPcbExporter.#xy(end)}) (width 0.1) (layer "${layer}") (net ${netId}) (uuid "${uuid()}"))`
+                )
+            }
         }
         return lines.join('\n')
     }
