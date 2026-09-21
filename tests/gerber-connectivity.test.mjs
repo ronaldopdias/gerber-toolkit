@@ -136,3 +136,38 @@ test('connectivity keeps unrelated nets on separate pads', () => {
 test('connectivity tolerates an empty model', () => {
     assert.equal(GerberCircuitJsonConnectivity.assignPadNets([]).size, 0)
 })
+
+test('connectivity net-tags a pour that a via ties to a named net', () => {
+    // A bottom pad on GND sits under a top pour; the pour should inherit GND
+    // through the via (the shared pad location).
+    const model = [
+        { type: 'source_net', source_net_id: 'g', name: 'GND' },
+        {
+            type: 'source_trace',
+            source_trace_id: 'tg',
+            connected_source_net_ids: ['g']
+        },
+        trace('ptg', 'tg', [
+            [0, 0],
+            [6, 0]
+        ]),
+        pad('padG', 3, 0),
+        {
+            type: 'pcb_copper_pour',
+            pcb_copper_pour_id: 'topPour',
+            layer: 'top',
+            brep_shape: {
+                outer_ring: {
+                    vertices: [
+                        { x: 0, y: -2 },
+                        { x: 6, y: -2 },
+                        { x: 6, y: 2 },
+                        { x: 0, y: 2 }
+                    ]
+                }
+            }
+        }
+    ]
+    const pourNets = GerberCircuitJsonConnectivity.assignPourNets(model)
+    assert.equal(pourNets.get('topPour'), 'GND')
+})

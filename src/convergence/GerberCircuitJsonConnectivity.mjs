@@ -11,8 +11,11 @@ import { GerberCircuitJsonPolygonUnion } from './GerberCircuitJsonPolygonUnion.m
  * stable synthetic `Net_N`). The result lets a boardview highlight every pad on
  * the same copper even when the source never named the net.
  *
- * Coordinates are treated in the document's own units; no cross-layer via
- * stitching is attempted, so pads inherit only names present on their own layer.
+ * Pads are named per layer from same-layer copper ({@link assignPadNets}).
+ * Pours, which appear where a layer projects as filled copper instead of
+ * traces, are named across layers ({@link assignPourNets}): each pad doubles as
+ * a through-hole via that carries its net to the pour sitting over it.
+ * Coordinates are treated in the document's own units.
  */
 export class GerberCircuitJsonConnectivity {
     /**
@@ -40,6 +43,127 @@ export class GerberCircuitJsonConnectivity {
             )
         }
         return assignment
+    }
+
+    /**
+     * Assigns a net name to copper pours from cross-layer connectivity.
+     *
+     * A copper layer that projects as filled pours instead of traces carries no
+     * trace-borne net names of its own, but on a through-hole board its copper
+     * reaches the routed side through vias. Each pad doubles as a via, so its
+     * net (from {@link assignPadNets}) seeds the pour component sitting over it;
+     * unioning the pours per layer then spreads that net across every pour in
+     * the same connected copper region. Named pours seed directly.
+     * @param {unknown} document DocumentResult, CircuitJSON model, or context.
+     * @returns {Map<string, string>} Pour id to net name.
+     */
+    static assignPourNets(document) {
+        const model = GerberCircuitJsonConnectivity.#model(document)
+        const padNet = GerberCircuitJsonConnectivity.assignPadNets(model)
+        const netNameBySource =
+            GerberCircuitJsonConnectivity.#sourceNetNames(model)
+        const vias = []
+        for (const element of model) {
+            if (element.type !== 'pcb_smtpad') continue
+            const name = padNet.get(element.pcb_smtpad_id)
+            if (GerberCircuitJsonConnectivity.#isRealNet(name)) {
+                vias.push({ x: Number(element.x), y: Number(element.y), name })
+            }
+        }
+        const byLayer = new Map()
+        for (const element of model) {
+            if (element.type !== 'pcb_copper_pour') continue
+            const vertices =
+                element.brep_shape?.outer_ring?.vertices ??
+                element.shape?.outer_ring?.vertices
+            if (!Array.isArray(vertices) || vertices.length < 3) continue
+            const ring = vertices.map((vertex) => [
+                Number(vertex.x),
+                Number(vertex.y)
+            ])
+            const key = element.layer ?? 'top'
+            if (!byLayer.has(key)) byLayer.set(key, [])
+            const named = netNameBySource.get(element.source_net_id)
+            byLayer.get(key).push({
+                id: element.pcb_copper_pour_id,
+                ring,
+                name: GerberCircuitJsonConnectivity.#isRealNet(named)
+                    ? named
+                    : null
+            })
+        }
+        const assignment = new Map()
+        for (const pours of byLayer.values()) {
+            GerberCircuitJsonConnectivity.#assignPourLayer(
+                pours,
+                vias,
+                assignment
+            )
+        }
+        return assignment
+    }
+
+    /**
+     * Unions one layer's pours and labels each with a seeded net.
+     * @param {{ id: string, ring: number[][], name: string|null }[]} pours Pours.
+     * @param {{ x: number, y: number, name: string }[]} vias Via seed points.
+     * @param {Map<string, string>} assignment Pour id to net accumulator.
+     * @returns {void}
+     */
+    static #assignPourLayer(pours, vias, assignment) {
+        const operands = pours.map((pour) => [[pour.ring]])
+        let components = []
+        try {
+            components = GerberCircuitJsonPolygonUnion.union(operands)
+        } catch {
+            components = []
+        }
+        const boxes = components.map((polygon) =>
+            GerberCircuitJsonConnectivity.#bounds(polygon[0])
+        )
+        const componentAt = (point) =>
+            GerberCircuitJsonConnectivity.#componentAt(point, components, boxes)
+        const names = new Map()
+        const seed = (point, name) => {
+            const component = componentAt(point)
+            if (component >= 0 && !names.has(component)) {
+                names.set(component, name)
+            }
+        }
+        for (const pour of pours) {
+            if (pour.name) {
+                seed(
+                    GerberCircuitJsonConnectivity.#centroid(pour.ring),
+                    pour.name
+                )
+            }
+        }
+        for (const via of vias) {
+            seed([via.x, via.y], via.name)
+        }
+        for (const pour of pours) {
+            const component = componentAt(
+                GerberCircuitJsonConnectivity.#centroid(pour.ring)
+            )
+            const name =
+                (component >= 0 ? names.get(component) : null) ?? pour.name
+            if (name) assignment.set(pour.id, name)
+        }
+    }
+
+    /**
+     * Returns the centroid of a ring.
+     * @param {number[][]} ring Polygon ring.
+     * @returns {number[]} Centroid point.
+     */
+    static #centroid(ring) {
+        let sumX = 0
+        let sumY = 0
+        for (const point of ring) {
+            sumX += point[0]
+            sumY += point[1]
+        }
+        return [sumX / ring.length, sumY / ring.length]
     }
 
     /**

@@ -22,7 +22,8 @@ export class CircuitJsonKicadPcbExporter {
      */
     static export(document) {
         const model = CircuitJsonKicadPcbExporter.#model(document)
-        const nets = CircuitJsonKicadPcbExporter.#netTable(model)
+        const pourNets = GerberCircuitJsonConnectivity.assignPourNets(model)
+        const nets = CircuitJsonKicadPcbExporter.#netTable(model, pourNets)
         const uuid = CircuitJsonKicadPcbExporter.#uuidFactory()
         const traceLayers = CircuitJsonKicadPcbExporter.#traceLayers(model)
         const body = [
@@ -34,7 +35,8 @@ export class CircuitJsonKicadPcbExporter {
                 model,
                 nets,
                 uuid,
-                traceLayers
+                traceLayers,
+                pourNets
             ),
             CircuitJsonKicadPcbExporter.#footprints(model, nets, uuid)
         ]
@@ -84,9 +86,10 @@ export class CircuitJsonKicadPcbExporter {
     /**
      * Builds the net-name-to-id table and the resolvers each element uses.
      * @param {object[]} model Model element array.
+     * @param {Map<string, string>} pourNets Pour id to net name.
      * @returns {{ order: [string, number][], idFor: (name: string) => number, trace: (trace: object) => string, pour: (pour: object) => string, pad: (pad: object) => string }} Net table.
      */
-    static #netTable(model) {
+    static #netTable(model, pourNets) {
         const netNameBySource = new Map()
         for (const element of model) {
             if (element.type === 'source_net') {
@@ -126,6 +129,7 @@ export class CircuitJsonKicadPcbExporter {
                 register(pourNameOf(element))
             else if (element.type === 'pcb_smtpad') register(padNameOf(element))
         }
+        for (const name of pourNets.values()) register(name)
         const idFor = (name) => ids.get(name) ?? 0
         return {
             order: [...ids.entries()].sort((left, right) => left[1] - right[1]),
@@ -304,9 +308,10 @@ export class CircuitJsonKicadPcbExporter {
      * @param {object} nets Net table.
      * @param {() => string} uuid UUID factory.
      * @param {Set<string>} traceLayers Layers that already have traces.
+     * @param {Map<string, string>} pourNets Pour id to net name.
      * @returns {string} Segment text.
      */
-    static #pourOutlines(model, nets, uuid, traceLayers) {
+    static #pourOutlines(model, nets, uuid, traceLayers, pourNets) {
         const lines = []
         for (const element of model) {
             if (element.type !== 'pcb_copper_pour') continue
@@ -317,7 +322,9 @@ export class CircuitJsonKicadPcbExporter {
             )
             if (ring.length < 3) continue
             const layer = CircuitJsonKicadPcbExporter.#layer(element.layer)
-            const netId = nets.idFor(nets.pour(element))
+            const netId = nets.idFor(
+                pourNets.get(element.pcb_copper_pour_id) ?? nets.pour(element)
+            )
             for (let index = 0; index < ring.length; index += 1) {
                 const start = ring[index]
                 const end = ring[(index + 1) % ring.length]
