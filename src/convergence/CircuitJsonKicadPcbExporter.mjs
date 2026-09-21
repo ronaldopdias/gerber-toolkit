@@ -42,7 +42,13 @@ export class CircuitJsonKicadPcbExporter {
                 pourNets
             ),
             CircuitJsonKicadPcbExporter.#footprints(model, nets, uuid, holes),
-            CircuitJsonKicadPcbExporter.#vias(model, nets, uuid, holes)
+            CircuitJsonKicadPcbExporter.#vias(
+                model,
+                nets,
+                uuid,
+                holes,
+                pourNets
+            )
         ]
             .filter((section) => section.length)
             .join('\n')
@@ -413,10 +419,14 @@ export class CircuitJsonKicadPcbExporter {
      * @param {object} nets Net table.
      * @param {() => string} uuid UUID factory.
      * @param {object[]} holes Plated holes.
+     * @param {Map<string, string>} pourNets Pour id to net name.
      * @returns {string} Via text.
      */
-    static #vias(model, nets, uuid, holes) {
+    static #vias(model, nets, uuid, holes, pourNets) {
         const pads = model.filter((element) => element.type === 'pcb_smtpad')
+        const pours = model.filter(
+            (element) => element.type === 'pcb_copper_pour'
+        )
         const lines = []
         for (const hole of holes) {
             const covered = pads.some(
@@ -431,11 +441,65 @@ export class CircuitJsonKicadPcbExporter {
             const size = CircuitJsonKicadPcbExporter.#round(
                 hole.outer_diameter || hole.hole_diameter
             )
+            const netId = nets.idFor(
+                CircuitJsonKicadPcbExporter.#netAtPoint(hole, pours, pourNets)
+            )
             lines.push(
-                `  (via (at ${CircuitJsonKicadPcbExporter.#xy(hole)}) (size ${size}) (drill ${drill}) (layers "F.Cu" "B.Cu") (net 0) (uuid "${uuid()}"))`
+                `  (via (at ${CircuitJsonKicadPcbExporter.#xy(hole)}) (size ${size}) (drill ${drill}) (layers "F.Cu" "B.Cu") (net ${netId}) (uuid "${uuid()}"))`
             )
         }
         return lines.join('\n')
+    }
+
+    /**
+     * Finds the net of the copper pour covering one point.
+     * @param {{ x: number, y: number }} point Query point.
+     * @param {object[]} pours Copper pours.
+     * @param {Map<string, string>} pourNets Pour id to net name.
+     * @returns {string} Net name, or an empty string.
+     */
+    static #netAtPoint(point, pours, pourNets) {
+        for (const pour of pours) {
+            const vertices =
+                pour.brep_shape?.outer_ring?.vertices ??
+                pour.shape?.outer_ring?.vertices
+            if (!Array.isArray(vertices) || vertices.length < 3) continue
+            if (
+                CircuitJsonKicadPcbExporter.#pointInRing(
+                    Number(point.x),
+                    Number(point.y),
+                    vertices
+                )
+            ) {
+                const net = pourNets.get(pour.pcb_copper_pour_id)
+                if (net) return net
+            }
+        }
+        return ''
+    }
+
+    /**
+     * Tests whether one point lies inside a ring (even-odd rule).
+     * @param {number} x Query X.
+     * @param {number} y Query Y.
+     * @param {{ x: number, y: number }[]} ring Ring vertices.
+     * @returns {boolean} True when inside.
+     */
+    static #pointInRing(x, y, ring) {
+        let inside = false
+        for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+            const xi = Number(ring[i].x)
+            const yi = Number(ring[i].y)
+            const xj = Number(ring[j].x)
+            const yj = Number(ring[j].y)
+            if (
+                yi > y !== yj > y &&
+                x < ((xj - xi) * (y - yi)) / (yj - yi || 1e-12) + xi
+            ) {
+                inside = !inside
+            }
+        }
+        return inside
     }
 
     /**
